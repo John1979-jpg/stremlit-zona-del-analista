@@ -199,10 +199,11 @@ def get_short_name(full_name):
 
 # ============== FUNCIONES AUXILIARES ==============
 
-def add_footer(fig, analyst_name, analyst_color):
-    """Añade el pie de página con el nombre del analista"""
+def add_footer(fig, analyst_name, match_date, analyst_color):
+    """Añade el pie de página con el nombre del analista y fecha"""
     if analyst_name:
-        fig.text(0.5, 0.01, f"Análisis: {analyst_name}", ha='center', va='bottom', 
+        footer_text = f"Análisis: {analyst_name} | Fecha: {match_date}"
+        fig.text(0.5, 0.01, footer_text, ha='center', va='bottom', 
                 fontsize=11, color=analyst_color, style='italic', fontweight='bold',
                 transform=fig.transFigure)
 
@@ -800,6 +801,90 @@ def plot_defensive_actions(ax, df, team_name, team_color, bg_color, line_color, 
         'Avg_Defensive_Height': round(avg_def_height, 2)
     }
 
+def plot_zone14_halfspaces(ax, df, team_name, team_color, bg_color, line_color, is_away=False):
+    """Dibuja los pases en Zona 14 y Half-Spaces"""
+    # Zona 14: x entre 70-88.5, y entre 22.67-45.33 (centro)
+    # Half-spaces: x entre 70-88.5, y entre 13.6-22.67 (derecho) y 45.33-54.4 (izquierdo)
+    
+    passes_df = df[(df['teamName'] == team_name) & 
+                   (df['type'] == 'Pass') & 
+                   (df['outcomeType'] == 'Successful')].copy()
+    
+    # Pases que TERMINAN en Zona 14
+    zone14_passes = passes_df[(passes_df['endX'] >= 70) & (passes_df['endX'] <= 88.5) &
+                               (passes_df['endY'] >= 22.67) & (passes_df['endY'] <= 45.33)]
+    
+    # Pases que TERMINAN en Half-Spaces
+    hs_left = passes_df[(passes_df['endX'] >= 70) & (passes_df['endX'] <= 88.5) &
+                        (passes_df['endY'] > 45.33) & (passes_df['endY'] <= 54.4)]
+    
+    hs_right = passes_df[(passes_df['endX'] >= 70) & (passes_df['endX'] <= 88.5) &
+                         (passes_df['endY'] >= 13.6) & (passes_df['endY'] < 22.67)]
+    
+    halfspace_passes = pd.concat([hs_left, hs_right])
+    
+    pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
+    pitch.draw(ax=ax)
+    ax.set_xlim(-0.5, 105.5)
+    
+    # Dibujar zonas
+    # Zona 14 (amarillo)
+    zone14_rect = patches.Rectangle((70, 22.67), 18.5, 22.66, linewidth=2, 
+                                      edgecolor='yellow', facecolor='yellow', alpha=0.2)
+    ax.add_patch(zone14_rect)
+    
+    # Half-space izquierdo (cyan)
+    hs_left_rect = patches.Rectangle((70, 45.33), 18.5, 9.07, linewidth=2,
+                                       edgecolor='cyan', facecolor='cyan', alpha=0.2)
+    ax.add_patch(hs_left_rect)
+    
+    # Half-space derecho (cyan)
+    hs_right_rect = patches.Rectangle((70, 13.6), 18.5, 9.07, linewidth=2,
+                                        edgecolor='cyan', facecolor='cyan', alpha=0.2)
+    ax.add_patch(hs_right_rect)
+    
+    if is_away:
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+    
+    # Dibujar pases a Zona 14
+    if not zone14_passes.empty:
+        pitch.lines(zone14_passes['x'], zone14_passes['y'], 
+                   zone14_passes['endX'], zone14_passes['endY'],
+                   lw=2, comet=True, color='yellow', ax=ax, alpha=0.7)
+        pitch.scatter(zone14_passes['endX'], zone14_passes['endY'], 
+                     s=50, color='yellow', edgecolors='white', linewidth=1, ax=ax, zorder=3)
+    
+    # Dibujar pases a Half-Spaces
+    if not halfspace_passes.empty:
+        pitch.lines(halfspace_passes['x'], halfspace_passes['y'],
+                   halfspace_passes['endX'], halfspace_passes['endY'],
+                   lw=2, comet=True, color='cyan', ax=ax, alpha=0.7)
+        pitch.scatter(halfspace_passes['endX'], halfspace_passes['endY'],
+                     s=50, color='cyan', edgecolors='white', linewidth=1, ax=ax, zorder=3)
+    
+    # Estadísticas
+    z14_count = len(zone14_passes)
+    hs_count = len(halfspace_passes)
+    total = z14_count + hs_count
+    
+    ax.set_title(f"{team_name}\nZona 14: {z14_count} | Half-Spaces: {hs_count}", 
+                color=line_color, fontsize=18, fontweight='bold')
+    
+    # Leyenda
+    bbox_props = dict(boxstyle="round,pad=0.3", edgecolor="None", facecolor=bg_color, alpha=0.75)
+    ax.text(5, 60, f"■ Zona 14\n■ Half-Spaces", color='white', fontsize=11, 
+            va='top', ha='left', bbox=bbox_props)
+    ax.text(5.5, 59, "■", color='yellow', fontsize=11, va='top', ha='left')
+    ax.text(5.5, 55.5, "■", color='cyan', fontsize=11, va='top', ha='left')
+    
+    return {
+        'Team': team_name,
+        'Zone14_Passes': z14_count,
+        'HalfSpace_Passes': hs_count,
+        'Total': total
+    }
+
 # ============== APLICACIÓN PRINCIPAL ==============
 
 def main():
@@ -814,17 +899,15 @@ def main():
         st.divider()
         st.header("📝 Información")
         analyst_name = st.text_input("Nombre del Analista", value="", placeholder="Tu nombre")
+        match_date = st.date_input("Fecha del Partido", value=date.today())
         
         st.divider()
-        st.header("🎨 Personalización")
-        accent_color = st.color_picker("Color de acento", "#e94560")
-        analyst_color = st.color_picker("Color del nombre", "#ffffff")
-        
-        # Colores fijos basados en el color de acento
-        bg_color = DEFAULT_COLORS['bg_color']
-        line_color = DEFAULT_COLORS['line_color']
-        home_color = accent_color
-        away_color = DEFAULT_COLORS['away_color']
+        st.header("🎨 Colores")
+        bg_color = st.color_picker("Color de fondo", DEFAULT_COLORS['bg_color'])
+        line_color = st.color_picker("Color de líneas", DEFAULT_COLORS['line_color'])
+        home_color = st.color_picker("Color equipo local", DEFAULT_COLORS['home_color'])
+        away_color = st.color_picker("Color equipo visitante", DEFAULT_COLORS['away_color'])
+        analyst_color = st.color_picker("Color nombre analista", "#ffffff")
     
     if uploaded_file is not None:
         try:
@@ -875,6 +958,7 @@ def main():
                 "⚽ Mapa de Tiros",
                 "🚀 Entradas Último Tercio",
                 "📦 Entradas al Área",
+                "🎯 Zona 14",
                 "🛡️ Acciones Defensivas",
                 "📊 Datos Raw"
             ])
@@ -893,7 +977,7 @@ def main():
                 plot_pass_network(axes[1], away_passes_between, away_avg_locs, 
                                  away_color, away_team, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -907,7 +991,7 @@ def main():
                 plot_defensive_block(axes[0], df, home_team, home_color, bg_color, line_color, players_df, is_away=False)
                 plot_defensive_block(axes[1], df, away_team, away_color, bg_color, line_color, players_df, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -921,7 +1005,7 @@ def main():
                 plot_progressive_passes(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_progressive_passes(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -935,7 +1019,7 @@ def main():
                 plot_progressive_carries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_progressive_carries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -948,7 +1032,7 @@ def main():
                 
                 shot_stats = plot_shotmap_combined(ax, df, home_team, away_team, home_color, away_color, bg_color, line_color)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -972,7 +1056,7 @@ def main():
                 plot_final_third_entries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_final_third_entries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -986,13 +1070,27 @@ def main():
                 plot_box_entries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_box_entries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 8: Acciones Defensivas
+            # Tab 8: Zona 14 y Half-Spaces
             with tabs[7]:
+                st.subheader("Zona 14 y Half-Spaces")
+                
+                fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
+                
+                plot_zone14_halfspaces(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
+                plot_zone14_halfspaces(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
+                
+                add_footer(fig, analyst_name, match_date, analyst_color)
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+            
+            # Tab 9: Acciones Defensivas
+            with tabs[8]:
                 st.subheader("Acciones Defensivas")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1000,13 +1098,13 @@ def main():
                 plot_defensive_actions(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_defensive_actions(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                add_footer(fig, analyst_name, analyst_color)
+                add_footer(fig, analyst_name, match_date, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 9: Datos Raw
-            with tabs[8]:
+            # Tab 10: Datos Raw
+            with tabs[9]:
                 st.subheader("Datos del Partido")
                 
                 # Mostrar tipos de eventos disponibles
