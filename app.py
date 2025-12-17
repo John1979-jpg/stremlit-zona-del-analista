@@ -475,16 +475,16 @@ def plot_shotmap_individual(ax, df, team_name, team_color, bg_color, line_color)
     # Dibujar tiros
     if not goals.empty:
         pitch.scatter(goals['x'], goals['y'], s=400, marker='football', 
-                     color=team_color, edgecolors='white', linewidth=2, ax=ax, zorder=3)
+                     color=team_color, edgecolors='white', ax=ax, zorder=3)
     if not saved.empty:
         pitch.scatter(saved['x'], saved['y'], s=250, marker='o',
-                     color='None', edgecolors=team_color, hatch='///////', linewidth=2, ax=ax, zorder=2)
+                     color='None', edgecolors=team_color, hatch='///////', linewidths=2, ax=ax, zorder=2)
     if not missed.empty:
         pitch.scatter(missed['x'], missed['y'], s=250, marker='o',
-                     color='None', edgecolors=team_color, linewidth=2, ax=ax, zorder=2)
+                     color='None', edgecolors=team_color, linewidths=2, ax=ax, zorder=2)
     if not post.empty:
         pitch.scatter(post['x'], post['y'], s=250, marker='o',
-                     color=team_color, edgecolors='orange', linewidth=2, ax=ax, zorder=2)
+                     color=team_color, edgecolors='orange', linewidths=2, ax=ax, zorder=2)
     
     # Calcular distancia media de tiro
     given_point = (105, 34)
