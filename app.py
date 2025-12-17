@@ -323,15 +323,17 @@ def plot_defensive_block(ax, df, team_name, team_color, bg_color, line_color, pl
     
     df_def = df[(df['teamName'] == team_name) & (df['type'].isin(defensive_types))].copy()
     
-    pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
+    # Crear pitch con line_zorder alto para que las líneas queden encima del heatmap
+    pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, 
+                  linewidth=2, corner_arcs=True, line_zorder=2)
     pitch.draw(ax=ax)
     ax.set_xlim(-0.5, 105.5)
-    
-    if is_away:
-        ax.invert_xaxis()
-        ax.invert_yaxis()
+    ax.set_facecolor(bg_color)
     
     if df_def.empty:
+        if is_away:
+            ax.invert_xaxis()
+            ax.invert_yaxis()
         ax.set_title(f"{team_name}\nBloque Defensivo", color=line_color, fontsize=18, fontweight='bold')
         return {}
     
@@ -345,7 +347,7 @@ def plot_defensive_block(ax, df, team_name, team_color, bg_color, line_color, pl
     # Excluir portero
     average_locs = average_locs[average_locs['position'] != 'GK']
     
-    # Heatmap de acciones defensivas
+    # Heatmap de acciones defensivas - con zorder=1 para que quede DEBAJO de las líneas
     flamingo_cmap = LinearSegmentedColormap.from_list("Flamingo", [bg_color, team_color], N=500)
     
     # Filtrar valores válidos para el heatmap
@@ -353,11 +355,16 @@ def plot_defensive_block(ax, df, team_name, team_color, bg_color, line_color, pl
     valid_y = df_def['y'].dropna()
     if len(valid_x) > 2 and len(valid_y) > 2:
         try:
-            pitch.kdeplot(valid_x, valid_y, ax=ax, fill=True, levels=100, thresh=0.05, cmap=flamingo_cmap)
+            pitch.kdeplot(valid_x, valid_y, ax=ax, fill=True, levels=100, thresh=0.05, 
+                         cmap=flamingo_cmap, zorder=1, alpha=0.7)
         except:
             pass  # Si falla el kdeplot, continuamos sin él
     
-    # Dibujar nodos de jugadores
+    if is_away:
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+    
+    # Dibujar nodos de jugadores (zorder alto para que queden encima)
     MAX_MARKER_SIZE = 3500
     if not average_locs.empty:
         average_locs['marker_size'] = (average_locs['count'] / average_locs['count'].max() * MAX_MARKER_SIZE)
@@ -366,19 +373,20 @@ def plot_defensive_block(ax, df, team_name, team_color, bg_color, line_color, pl
             is_starter = row.get('isFirstEleven', True)
             marker = 'o' if is_starter else 's'
             pitch.scatter(row['x'], row['y'], s=row['marker_size']+100, marker=marker, 
-                         color=bg_color, edgecolors=line_color, linewidth=1, alpha=1, zorder=3, ax=ax)
+                         color=bg_color, edgecolors=line_color, linewidth=1, alpha=1, zorder=4, ax=ax)
             
             shirt_no = row.get('shirtNo', '')
             ax.annotate(str(int(shirt_no)) if pd.notna(shirt_no) else '', 
-                       xy=(row['x'], row['y']), ha='center', va='center', fontsize=12, color=line_color)
+                       xy=(row['x'], row['y']), ha='center', va='center', fontsize=12, 
+                       color=line_color, zorder=5)
     
-    # Dispersión de acciones
-    pitch.scatter(df_def['x'], df_def['y'], s=10, marker='x', color='yellow', alpha=0.2, ax=ax)
+    # Dispersión de acciones (zorder=3 para que quede encima del heatmap pero debajo de nodos)
+    pitch.scatter(df_def['x'], df_def['y'], s=10, marker='x', color='yellow', alpha=0.3, zorder=3, ax=ax)
     
     # Altura media defensiva
     dah = average_locs['x'].mean() if not average_locs.empty else 0
     if dah > 0:
-        ax.axvline(x=dah, color='gray', linestyle='--', alpha=0.75, linewidth=2)
+        ax.axvline(x=dah, color='gray', linestyle='--', alpha=0.75, linewidth=2, zorder=3)
         
         if is_away:
             ax.text(dah - 1, 73, f"DAH: {dah:.1f}m", fontsize=12, color=line_color, ha='left')
