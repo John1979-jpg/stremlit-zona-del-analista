@@ -199,11 +199,12 @@ def get_short_name(full_name):
 
 # ============== FUNCIONES AUXILIARES ==============
 
-def add_footer(fig, analyst_name, match_date, fotmob_id):
-    """Añade el pie de página con información del analista"""
-    footer_text = f"Análisis: {analyst_name} | Fecha: {match_date} | FotMob ID: {fotmob_id} | Datos: WhoScored"
-    fig.text(0.5, 0.02, footer_text, ha='center', va='center', fontsize=10, 
-             color='gray', style='italic', transform=fig.transFigure)
+def add_footer(fig, analyst_name, analyst_color):
+    """Añade el pie de página con el nombre del analista"""
+    if analyst_name:
+        fig.text(0.5, 0.01, f"Análisis: {analyst_name}", ha='center', va='bottom', 
+                fontsize=11, color=analyst_color, style='italic', fontweight='bold',
+                transform=fig.transFigure)
 
 def get_passes_df(df):
     """Obtiene dataframe de pases con receptor"""
@@ -812,18 +813,18 @@ def main():
         
         st.divider()
         st.header("📝 Información")
-        
         analyst_name = st.text_input("Nombre del Analista", value="", placeholder="Tu nombre")
-        match_date = st.date_input("Fecha del Partido", value=date.today())
-        fotmob_id = st.text_input("FotMob Match ID", value="", placeholder="Ej: 4621571")
         
         st.divider()
-        st.header("🎨 Colores")
+        st.header("🎨 Personalización")
+        accent_color = st.color_picker("Color de acento", "#e94560")
+        analyst_color = st.color_picker("Color del nombre", "#ffffff")
         
-        bg_color = st.color_picker("Color de fondo", DEFAULT_COLORS['bg_color'])
-        line_color = st.color_picker("Color de líneas", DEFAULT_COLORS['line_color'])
-        home_color = st.color_picker("Color equipo local", DEFAULT_COLORS['home_color'])
-        away_color = st.color_picker("Color equipo visitante", DEFAULT_COLORS['away_color'])
+        # Colores fijos basados en el color de acento
+        bg_color = DEFAULT_COLORS['bg_color']
+        line_color = DEFAULT_COLORS['line_color']
+        home_color = accent_color
+        away_color = DEFAULT_COLORS['away_color']
     
     if uploaded_file is not None:
         try:
@@ -872,7 +873,6 @@ def main():
                 "📈 Pases Progresivos",
                 "🏃 Conducciones",
                 "⚽ Mapa de Tiros",
-                "🎯 Tiros Individual",
                 "🚀 Entradas Último Tercio",
                 "📦 Entradas al Área",
                 "🛡️ Acciones Defensivas",
@@ -893,9 +893,7 @@ def main():
                 plot_pass_network(axes[1], away_passes_between, away_avg_locs, 
                                  away_color, away_team, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -909,9 +907,7 @@ def main():
                 plot_defensive_block(axes[0], df, home_team, home_color, bg_color, line_color, players_df, is_away=False)
                 plot_defensive_block(axes[1], df, away_team, away_color, bg_color, line_color, players_df, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -925,9 +921,7 @@ def main():
                 plot_progressive_passes(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_progressive_passes(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
@@ -941,61 +935,36 @@ def main():
                 plot_progressive_carries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_progressive_carries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 5: Mapa de Tiros Combinado
+            # Tab 5: Mapa de Tiros
             with tabs[4]:
-                st.subheader("Mapa de Tiros (Ambos Equipos)")
+                st.subheader("Mapa de Tiros")
                 
                 fig, ax = plt.subplots(figsize=(14, 10), facecolor=bg_color)
                 
                 shot_stats = plot_shotmap_combined(ax, df, home_team, away_team, home_color, away_color, bg_color, line_color)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
-            
-            # Tab 6: Mapa de Tiros Individual
-            with tabs[5]:
-                st.subheader("Mapa de Tiros (Por Equipo)")
-                
-                fig, axes = plt.subplots(1, 2, figsize=(16, 10), facecolor=bg_color)
-                
-                home_shot_stats = plot_shotmap_individual(axes[0], df, home_team, home_color, bg_color, line_color)
-                away_shot_stats = plot_shotmap_individual(axes[1], df, away_team, away_color, bg_color, line_color)
-                
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
                 
                 # Mostrar estadísticas
-                col1, col2 = st.columns(2)
-                with col1:
-                    if home_shot_stats:
-                        st.markdown(f"**{home_team}**")
-                        st.write(f"- Tiros: {home_shot_stats.get('Shots', 0)}")
-                        st.write(f"- Goles: {home_shot_stats.get('Goals', 0)}")
-                        st.write(f"- A puerta: {home_shot_stats.get('Shots_on_Target', 0)}")
-                with col2:
-                    if away_shot_stats:
-                        st.markdown(f"**{away_team}**")
-                        st.write(f"- Tiros: {away_shot_stats.get('Shots', 0)}")
-                        st.write(f"- Goles: {away_shot_stats.get('Goals', 0)}")
-                        st.write(f"- A puerta: {away_shot_stats.get('Shots_on_Target', 0)}")
+                if shot_stats:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        home_stats = shot_stats.get(home_team, {})
+                        st.metric(home_team, f"{home_stats.get('Goals', 0)} Goles / {home_stats.get('Shots', 0)} Tiros")
+                    with col2:
+                        away_stats = shot_stats.get(away_team, {})
+                        st.metric(away_team, f"{away_stats.get('Goals', 0)} Goles / {away_stats.get('Shots', 0)} Tiros")
             
-            # Tab 7: Entradas Último Tercio
-            with tabs[6]:
+            # Tab 6: Entradas Último Tercio
+            with tabs[5]:
                 st.subheader("Entradas al Último Tercio")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1003,15 +972,13 @@ def main():
                 plot_final_third_entries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_final_third_entries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 8: Entradas al Área
-            with tabs[7]:
+            # Tab 7: Entradas al Área
+            with tabs[6]:
                 st.subheader("Entradas al Área")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1019,15 +986,13 @@ def main():
                 plot_box_entries(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_box_entries(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 9: Acciones Defensivas
-            with tabs[8]:
+            # Tab 8: Acciones Defensivas
+            with tabs[7]:
                 st.subheader("Acciones Defensivas")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1035,15 +1000,13 @@ def main():
                 plot_defensive_actions(axes[0], df, home_team, home_color, bg_color, line_color, is_away=False)
                 plot_defensive_actions(axes[1], df, away_team, away_color, bg_color, line_color, is_away=True)
                 
-                if analyst_name:
-                    add_footer(fig, analyst_name, match_date, fotmob_id if fotmob_id else "N/A")
-                
+                add_footer(fig, analyst_name, analyst_color)
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 10: Datos Raw
-            with tabs[9]:
+            # Tab 9: Datos Raw
+            with tabs[8]:
                 st.subheader("Datos del Partido")
                 
                 # Mostrar tipos de eventos disponibles
