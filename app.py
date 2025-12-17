@@ -885,6 +885,75 @@ def plot_zone14_halfspaces(ax, df, team_name, team_color, bg_color, line_color, 
         'Total': total
     }
 
+def calculate_match_stats(df, team_name):
+    """Calcula las estadísticas del partido para un equipo"""
+    team_df = df[df['teamName'] == team_name]
+    
+    # Tiros
+    shot_types = ['Goal', 'SavedShot', 'AttemptSaved', 'MissedShots', 'MissedShot', 'Miss', 
+                  'ShotOnPost', 'Post', 'BlockedShot']
+    shots = team_df[team_df['type'].isin(shot_types)]
+    goals = team_df[team_df['type'] == 'Goal']
+    shots_on_target = team_df[team_df['type'].isin(['Goal', 'SavedShot', 'AttemptSaved'])]
+    
+    # Pases
+    passes = team_df[team_df['type'] == 'Pass']
+    passes_completed = passes[passes['outcomeType'] == 'Successful']
+    pass_accuracy = (len(passes_completed) / len(passes) * 100) if len(passes) > 0 else 0
+    
+    # Pases progresivos
+    prog_passes = team_df[(team_df['type'] == 'Pass') & (team_df['prog_pass'] >= 9.11) & 
+                          (team_df['outcomeType'] == 'Successful')]
+    
+    # Conducciones progresivas  
+    prog_carries = team_df[(team_df['type'] == 'Carry') & (team_df['prog_carry'] >= 9.11)]
+    
+    # Acciones defensivas
+    defensive_types = ['Tackle', 'Interception', 'Clearance', 'BlockedPass', 'Aerial', 
+                       'BallRecovery', 'Challenge']
+    defensive_actions = team_df[team_df['type'].isin(defensive_types)]
+    
+    tackles = team_df[team_df['type'] == 'Tackle']
+    interceptions = team_df[team_df['type'] == 'Interception']
+    clearances = team_df[team_df['type'] == 'Clearance']
+    aerials = team_df[team_df['type'] == 'Aerial']
+    aerials_won = aerials[aerials['outcomeType'] == 'Successful']
+    
+    # Faltas y tarjetas
+    fouls = team_df[team_df['type'] == 'Foul']
+    
+    # Corners (buscar en qualifiers)
+    corners = passes[passes['qualifiers'].str.contains('CornerTaken', na=False)] if 'qualifiers' in passes.columns else pd.DataFrame()
+    
+    # Entradas al área
+    box_entries_pass = team_df[(team_df['type'] == 'Pass') & 
+                                (team_df['outcomeType'] == 'Successful') &
+                                (team_df['x'] < 88.5) & (team_df['endX'] >= 88.5) &
+                                (team_df['endY'] >= 13.85) & (team_df['endY'] <= 54.15)]
+    box_entries_carry = team_df[(team_df['type'] == 'Carry') & 
+                                 (team_df['x'] < 88.5) & (team_df['endX'] >= 88.5) &
+                                 (team_df['endY'] >= 13.85) & (team_df['endY'] <= 54.15)]
+    
+    return {
+        'Goles': len(goals),
+        'Tiros': len(shots),
+        'Tiros a puerta': len(shots_on_target),
+        'Pases totales': len(passes),
+        'Pases completados': len(passes_completed),
+        'Precisión pases': f"{pass_accuracy:.1f}%",
+        'Pases progresivos': len(prog_passes),
+        'Conducciones progresivas': len(prog_carries),
+        'Entradas al área': len(box_entries_pass) + len(box_entries_carry),
+        'Corners': len(corners),
+        'Acciones defensivas': len(defensive_actions),
+        'Tackles': len(tackles),
+        'Intercepciones': len(interceptions),
+        'Despejes': len(clearances),
+        'Duelos aéreos': len(aerials),
+        'Duelos aéreos ganados': len(aerials_won),
+        'Faltas cometidas': len(fouls)
+    }
+
 # ============== APLICACIÓN PRINCIPAL ==============
 
 def main():
@@ -951,6 +1020,7 @@ def main():
             
             # Tabs de visualizaciones
             tabs = st.tabs([
+                "📊 Estadísticas",
                 "🔗 Red de Pases", 
                 "🛡️ Bloque Defensivo",
                 "📈 Pases Progresivos",
@@ -960,11 +1030,43 @@ def main():
                 "📦 Entradas al Área",
                 "🎯 Zona 14",
                 "🛡️ Acciones Defensivas",
-                "📊 Datos Raw"
+                "📋 Datos Raw"
             ])
             
-            # Tab 1: Pass Network
+            # Tab 1: Estadísticas del partido
             with tabs[0]:
+                st.subheader("Estadísticas del Partido")
+                
+                home_stats = calculate_match_stats(df, home_team)
+                away_stats = calculate_match_stats(df, away_team)
+                
+                # Crear tabla comparativa
+                col1, col2, col3 = st.columns([2, 3, 2])
+                
+                with col1:
+                    st.markdown(f"### {home_team}")
+                with col2:
+                    st.markdown("### ")
+                with col3:
+                    st.markdown(f"### {away_team}")
+                
+                st.divider()
+                
+                for stat_name in home_stats.keys():
+                    col1, col2, col3 = st.columns([2, 3, 2])
+                    
+                    home_val = home_stats[stat_name]
+                    away_val = away_stats[stat_name]
+                    
+                    with col1:
+                        st.markdown(f"<h3 style='text-align: center; color: {home_color};'>{home_val}</h3>", unsafe_allow_html=True)
+                    with col2:
+                        st.markdown(f"<p style='text-align: center; color: gray;'>{stat_name}</p>", unsafe_allow_html=True)
+                    with col3:
+                        st.markdown(f"<h3 style='text-align: center; color: {away_color};'>{away_val}</h3>", unsafe_allow_html=True)
+            
+            # Tab 2: Pass Network
+            with tabs[1]:
                 st.subheader("Red de Pases")
                 
                 home_passes_between, home_avg_locs = get_passes_between_df(home_team, passes_df, players_df, df)
@@ -982,8 +1084,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 2: Bloque Defensivo
-            with tabs[1]:
+            # Tab 3: Bloque Defensivo
+            with tabs[2]:
                 st.subheader("Bloque Defensivo")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -996,8 +1098,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 3: Pases Progresivos
-            with tabs[2]:
+            # Tab 4: Pases Progresivos
+            with tabs[3]:
                 st.subheader("Pases Progresivos")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1010,8 +1112,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 4: Conducciones Progresivas
-            with tabs[3]:
+            # Tab 5: Conducciones Progresivas
+            with tabs[4]:
                 st.subheader("Conducciones Progresivas")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1024,8 +1126,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 5: Mapa de Tiros
-            with tabs[4]:
+            # Tab 6: Mapa de Tiros
+            with tabs[5]:
                 st.subheader("Mapa de Tiros")
                 
                 fig, ax = plt.subplots(figsize=(14, 10), facecolor=bg_color)
@@ -1047,8 +1149,8 @@ def main():
                         away_stats = shot_stats.get(away_team, {})
                         st.metric(away_team, f"{away_stats.get('Goals', 0)} Goles / {away_stats.get('Shots', 0)} Tiros")
             
-            # Tab 6: Entradas Último Tercio
-            with tabs[5]:
+            # Tab 7: Entradas Último Tercio
+            with tabs[6]:
                 st.subheader("Entradas al Último Tercio")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1061,8 +1163,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 7: Entradas al Área
-            with tabs[6]:
+            # Tab 8: Entradas al Área
+            with tabs[7]:
                 st.subheader("Entradas al Área")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1075,8 +1177,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 8: Zona 14 y Half-Spaces
-            with tabs[7]:
+            # Tab 9: Zona 14 y Half-Spaces
+            with tabs[8]:
                 st.subheader("Zona 14 y Half-Spaces")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1089,8 +1191,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 9: Acciones Defensivas
-            with tabs[8]:
+            # Tab 10: Acciones Defensivas
+            with tabs[9]:
                 st.subheader("Acciones Defensivas")
                 
                 fig, axes = plt.subplots(1, 2, figsize=(20, 10), facecolor=bg_color)
@@ -1103,8 +1205,8 @@ def main():
                 st.pyplot(fig)
                 plt.close()
             
-            # Tab 10: Datos Raw
-            with tabs[9]:
+            # Tab 11: Datos Raw
+            with tabs[10]:
                 st.subheader("Datos del Partido")
                 
                 # Mostrar tipos de eventos disponibles
