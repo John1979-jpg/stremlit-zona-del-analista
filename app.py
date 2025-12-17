@@ -409,13 +409,28 @@ def plot_progressive_carries(ax, df, team_name, team_color, bg_color, line_color
 
 def plot_shotmap_combined(ax, df, home_team, away_team, home_color, away_color, bg_color, line_color):
     """Dibuja el mapa de tiros combinado (ambos equipos en un campo)"""
-    shot_types = ['Goal', 'SavedShot', 'MissedShots', 'ShotOnPost']
+    # Tipos de tiros compatibles con WhoScored (incluye todas las variantes posibles)
+    shot_types = ['Goal', 'SavedShot', 'AttemptSaved', 'MissedShots', 'MissedShot', 'Miss', 
+                  'ShotOnPost', 'Post', 'BlockedShot']
     shots_df = df[df['type'].isin(shot_types)].copy()
+    
+    # Normalizar tipos para el procesamiento
+    shots_df['type'] = shots_df['type'].replace({
+        'AttemptSaved': 'SavedShot',
+        'MissedShot': 'MissedShots',
+        'Miss': 'MissedShots',
+        'Post': 'ShotOnPost',
+        'BlockedShot': 'MissedShots'  # Tratamos bloqueados como fallados
+    })
     
     pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
     pitch.draw(ax=ax)
     ax.set_ylim(-0.5, 68.5)
     ax.set_xlim(-0.5, 105.5)
+    
+    if shots_df.empty:
+        ax.set_title("Mapa de Tiros\n(Sin datos de tiros)", color=line_color, fontsize=20, fontweight='bold')
+        return {home_team: {'Goals': 0, 'Shots': 0}, away_team: {'Goals': 0, 'Shots': 0}}
     
     home_shots = shots_df[shots_df['teamName'] == home_team]
     away_shots = shots_df[shots_df['teamName'] == away_team]
@@ -456,8 +471,19 @@ def plot_shotmap_combined(ax, df, home_team, away_team, home_color, away_color, 
 
 def plot_shotmap_individual(ax, df, team_name, team_color, bg_color, line_color):
     """Dibuja el mapa de tiros individual de un equipo (media cancha vertical)"""
-    shot_types = ['Goal', 'SavedShot', 'MissedShots', 'ShotOnPost']
+    # Tipos de tiros compatibles con WhoScored (incluye todas las variantes posibles)
+    shot_types = ['Goal', 'SavedShot', 'AttemptSaved', 'MissedShots', 'MissedShot', 'Miss',
+                  'ShotOnPost', 'Post', 'BlockedShot']
     shots_df = df[(df['type'].isin(shot_types)) & (df['teamName'] == team_name)].copy()
+    
+    # Normalizar tipos para el procesamiento
+    shots_df['type'] = shots_df['type'].replace({
+        'AttemptSaved': 'SavedShot',
+        'MissedShot': 'MissedShots',
+        'Miss': 'MissedShots',
+        'Post': 'ShotOnPost',
+        'BlockedShot': 'MissedShots'
+    })
     
     pitch = VerticalPitch(pitch_type='uefa', half=True, pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
     pitch.draw(ax=ax)
@@ -512,7 +538,9 @@ def plot_shotmap_individual(ax, df, team_name, team_color, bg_color, line_color)
 
 def plot_defensive_actions(ax, df, team_name, team_color, bg_color, line_color, is_away=False):
     """Dibuja las acciones defensivas"""
-    defensive_types = ['Tackle', 'Interception', 'Clearance', 'BlockedPass', 'Aerial']
+    # Tipos defensivos compatibles con WhoScored (incluye variantes)
+    defensive_types = ['Tackle', 'Interception', 'Clearance', 'BlockedPass', 'Aerial', 
+                       'BallRecovery', 'Challenge', 'Foul', 'Save', 'Punch', 'Claim']
     df_def = df[(df['teamName'] == team_name) & (df['type'].isin(defensive_types))].copy()
     
     pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
@@ -599,11 +627,30 @@ def main():
                 away_team = teams_dict[away_team_id]
                 
                 df_passes = df[df['type'] == 'Pass'].copy()
-                df_passes['receiver'] = df_passes['playerId'].shift(-1)
-                df = df.merge(df_passes[['eventId', 'receiver']], on='eventId', how='left', suffixes=('', '_pass'))
+                # El receiver es el jugador que ejecuta el siguiente evento del mismo equipo (si el pase fue exitoso)
+                df_passes_sorted = df_passes.sort_values(['period', 'cumulative_mins']).reset_index(drop=True)
+                
+                # Crear columna receiver basándose en el siguiente evento del mismo equipo
+                receivers = []
+                for i, row in df_passes_sorted.iterrows():
+                    if i < len(df_passes_sorted) - 1:
+                        next_row = df_passes_sorted.iloc[i + 1]
+                        if row['teamId'] == next_row['teamId'] and row['outcomeType'] == 'Successful':
+                            receivers.append(next_row['playerId'])
+                        else:
+                            receivers.append(np.nan)
+                    else:
+                        receivers.append(np.nan)
+                
+                df_passes_sorted['receiver'] = receivers
+                
+                # Merge receiver back to main df
+                df = df.merge(df_passes_sorted[['eventId', 'receiver']], on='eventId', how='left', suffixes=('', '_pass'))
                 if 'receiver_pass' in df.columns:
                     df['receiver'] = df['receiver_pass']
                     df.drop('receiver_pass', axis=1, inplace=True)
+                elif 'receiver' not in df.columns:
+                    df['receiver'] = np.nan
                 
                 if 'name' not in df.columns:
                     df = df.merge(players_df[['playerId', 'name', 'shirtNo', 'position', 'isFirstEleven']], 
@@ -766,6 +813,11 @@ def main():
             # Tab 7: Datos Raw
             with tabs[6]:
                 st.subheader("Datos del Partido")
+                
+                # Mostrar tipos de eventos disponibles (útil para debug)
+                with st.expander("🔍 Tipos de eventos en el partido"):
+                    event_types = df['type'].value_counts()
+                    st.dataframe(event_types.reset_index().rename(columns={'index': 'Tipo', 'type': 'Cantidad'}))
                 
                 st.markdown("**Eventos del partido:**")
                 cols_to_show = ['minute', 'second', 'teamName', 'type', 'outcomeType', 'x', 'y', 'endX', 'endY']
