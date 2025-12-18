@@ -51,6 +51,7 @@ def process_dataframe(df, teams_dict):
     df['outcomeType'] = df['outcomeType'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
     df['period'] = df['period'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
     df['period'] = df['period'].replace({'FirstHalf': 1, 'SecondHalf': 2, 'FirstPeriodOfExtraTime': 3, 'SecondPeriodOfExtraTime': 4, 'PenaltyShootout': 5})
+    df['period'] = pd.to_numeric(df['period'], errors='coerce')
     df['teamName'] = df['teamId'].map(teams_dict)
     
     df['x'] = pd.to_numeric(df['x'], errors='coerce') * 1.05
@@ -69,7 +70,7 @@ def process_dataframe(df, teams_dict):
     
     df['cumulative_mins'] = df['minute'] + (1/60) * df['second']
     for period in df['period'].unique():
-        if pd.notna(period) and period > 1:
+        if pd.notna(period) and int(period) > 1:
             mask_prev = df['period'] == period - 1
             mask_curr = df['period'] == period
             if mask_prev.any() and mask_curr.any():
