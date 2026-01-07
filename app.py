@@ -497,7 +497,7 @@ def plot_goalPost(ax):
     ax.set_ylim(-0.5, 68.5)
     ax.set_xlim(-0.5, 105.5)
     
-    # Away goalpost (abajo)
+    # Away goalpost bars (abajo)
     ax.plot([7.5, 7.5], [0, 30], color=line_color, linewidth=5)
     ax.plot([7.5, 97.5], [30, 30], color=line_color, linewidth=5)
     ax.plot([97.5, 97.5], [30, 0], color=line_color, linewidth=5)
@@ -507,7 +507,7 @@ def plot_goalPost(ax):
     for x in (np.arange(0, 11) * 9) + 7.5:
         ax.plot([x, x], [0, 30], color=line_color, linewidth=2, alpha=0.2)
     
-    # Home goalpost (arriba)
+    # Home goalpost bars (arriba)
     ax.plot([7.5, 7.5], [38, 68], color=line_color, linewidth=5)
     ax.plot([7.5, 97.5], [68, 68], color=line_color, linewidth=5)
     ax.plot([97.5, 97.5], [68, 38], color=line_color, linewidth=5)
@@ -517,63 +517,75 @@ def plot_goalPost(ax):
     for x in (np.arange(0, 11) * 9) + 7.5:
         ax.plot([x, x], [38, 68], color=line_color, linewidth=2, alpha=0.2)
     
-    hSaves = aSaves = 0
+    hSaves = 0
+    aSaves = 0
     
-    # Verificar si hay datos de goalMouth
-    if 'goalMouthZ' in hs.columns and 'goalMouthY' in hs.columns:
-        # Transformar coordenadas - goalMouthY ya está en escala 0.68, necesitamos convertir a 0-100 primero
-        # goalMouthY original era 0-100, lo multiplicamos por 0.68 en process_all_data
-        # Para la transformación del Colab: ((37.66 - goalMouthY_original) * 12.295) + 7.5
-        # goalMouthY_original = goalMouthY / 0.68
-        
-        for idx, row in hs.iterrows():
-            if pd.notna(row.get('goalMouthZ')) and pd.notna(row.get('goalMouthY')):
-                # Coordenada Z (altura)
-                gz = row['goalMouthZ'] * 0.75
-                # Coordenada Y (horizontal) - convertir de vuelta a escala original
-                gy_orig = row['goalMouthY'] / 0.68 if row['goalMouthY'] != 0 else 50
-                gy = ((37.66 - gy_orig) * 12.295) + 7.5
-                gy = max(7.5, min(97.5, gy))  # Limitar al área de portería
-                gz = max(0, min(30, gz))
-                
-                shot_type = row['type']
-                is_bc = 'BigChance' in str(row.get('qualifiers', ''))
-                size = 1000 if is_bc else 350
-                
-                if shot_type == 'Goal' and 'OwnGoal' not in str(row.get('qualifiers', '')):
-                    ax.scatter(gy, gz, s=size, marker='o', c='white', edgecolor='gold', linewidth=3, zorder=5)
-                elif shot_type == 'SavedShot':
-                    ax.scatter(gy, gz, s=size, marker='o', c='none', edgecolor=acol, hatch='/////', linewidth=2, zorder=4)
-                    hSaves += 1
-                elif shot_type == 'ShotOnPost':
-                    ax.scatter(gy, gz, s=size, marker='o', c='none', edgecolor='orange', hatch='/////', linewidth=2, zorder=4)
-        
-        for idx, row in aws.iterrows():
-            if pd.notna(row.get('goalMouthZ')) and pd.notna(row.get('goalMouthY')):
-                # Coordenada Z (altura) + offset para portería de arriba
-                gz = (row['goalMouthZ'] * 0.75) + 38
-                # Coordenada Y (horizontal)
-                gy_orig = row['goalMouthY'] / 0.68 if row['goalMouthY'] != 0 else 50
-                gy = ((37.66 - gy_orig) * 12.295) + 7.5
-                gy = max(7.5, min(97.5, gy))
-                gz = max(38, min(68, gz))
-                
-                shot_type = row['type']
-                is_bc = 'BigChance' in str(row.get('qualifiers', ''))
-                size = 1000 if is_bc else 350
-                
-                if shot_type == 'Goal' and 'OwnGoal' not in str(row.get('qualifiers', '')):
-                    ax.scatter(gy, gz, s=size, marker='o', c='white', edgecolor='gold', linewidth=3, zorder=5)
-                elif shot_type == 'SavedShot':
-                    ax.scatter(gy, gz, s=size, marker='o', c='none', edgecolor=hcol, hatch='/////', linewidth=2, zorder=4)
-                    aSaves += 1
-                elif shot_type == 'ShotOnPost':
-                    ax.scatter(gy, gz, s=size, marker='o', c='none', edgecolor='orange', hatch='/////', linewidth=2, zorder=4)
+    # Verificar si hay datos de goalMouth válidos
+    has_goalmouth = ('goalMouthY' in hs.columns and 'goalMouthZ' in hs.columns and 
+                     not hs['goalMouthY'].isna().all() and not hs['goalMouthZ'].isna().all())
     
-    # Si no hay coordenadas goalMouth, contar paradas de otra forma
-    if hSaves == 0:
+    if has_goalmouth:
+        # Transformar coordenadas EXACTAMENTE como el Colab
+        hs['goalMouthZ_plot'] = hs['goalMouthZ'] * 0.75
+        aws['goalMouthZ_plot'] = (aws['goalMouthZ'] * 0.75) + 38
+        hs['goalMouthY_plot'] = ((37.66 - hs['goalMouthY']) * 12.295) + 7.5
+        aws['goalMouthY_plot'] = ((37.66 - aws['goalMouthY']) * 12.295) + 7.5
+        
+        # Limitar valores al rango válido
+        hs['goalMouthY_plot'] = hs['goalMouthY_plot'].clip(7.5, 97.5)
+        hs['goalMouthZ_plot'] = hs['goalMouthZ_plot'].clip(0, 30)
+        aws['goalMouthY_plot'] = aws['goalMouthY_plot'].clip(7.5, 97.5)
+        aws['goalMouthZ_plot'] = aws['goalMouthZ_plot'].clip(38, 68)
+        
+        # Filtrar tiros sin BigChance y con datos válidos
+        hSavedf = hs[(hs['type']=='SavedShot') & (~hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        hGoaldf = hs[(hs['type']=='Goal') & (~hs['qualifiers'].str.contains('OwnGoal', na=False)) & (~hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        hPostdf = hs[(hs['type']=='ShotOnPost') & (~hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        aSavedf = aws[(aws['type']=='SavedShot') & (~aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        aGoaldf = aws[(aws['type']=='Goal') & (~aws['qualifiers'].str.contains('OwnGoal', na=False)) & (~aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        aPostdf = aws[(aws['type']=='ShotOnPost') & (~aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        
+        # Filtrar tiros con BigChance
+        hSavedf_bc = hs[(hs['type']=='SavedShot') & (hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        hGoaldf_bc = hs[(hs['type']=='Goal') & (~hs['qualifiers'].str.contains('OwnGoal', na=False)) & (hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        hPostdf_bc = hs[(hs['type']=='ShotOnPost') & (hs['qualifiers'].str.contains('BigChance', na=False)) & hs['goalMouthY_plot'].notna()]
+        aSavedf_bc = aws[(aws['type']=='SavedShot') & (aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        aGoaldf_bc = aws[(aws['type']=='Goal') & (~aws['qualifiers'].str.contains('OwnGoal', na=False)) & (aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        aPostdf_bc = aws[(aws['type']=='ShotOnPost') & (aws['qualifiers'].str.contains('BigChance', na=False)) & aws['goalMouthY_plot'].notna()]
+        
+        # Scatter sin BigChance
+        if len(hSavedf) > 0:
+            pitch.scatter(hSavedf.goalMouthY_plot, hSavedf.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolor=acol, hatch='/////', s=350, ax=ax)
+        if len(hGoaldf) > 0:
+            pitch.scatter(hGoaldf.goalMouthY_plot, hGoaldf.goalMouthZ_plot, marker='football', c=bg_color, zorder=3, edgecolors='white', s=350, ax=ax)
+        if len(hPostdf) > 0:
+            pitch.scatter(hPostdf.goalMouthY_plot, hPostdf.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolors='orange', hatch='/////', s=350, ax=ax)
+        if len(aSavedf) > 0:
+            pitch.scatter(aSavedf.goalMouthY_plot, aSavedf.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolor=hcol, hatch='/////', s=350, ax=ax)
+        if len(aGoaldf) > 0:
+            pitch.scatter(aGoaldf.goalMouthY_plot, aGoaldf.goalMouthZ_plot, marker='football', c=bg_color, zorder=3, edgecolors='white', s=350, ax=ax)
+        if len(aPostdf) > 0:
+            pitch.scatter(aPostdf.goalMouthY_plot, aPostdf.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolors='orange', hatch='/////', s=350, ax=ax)
+        
+        # Scatter con BigChance (más grandes)
+        if len(hSavedf_bc) > 0:
+            pitch.scatter(hSavedf_bc.goalMouthY_plot, hSavedf_bc.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolor=acol, hatch='/////', s=1000, ax=ax)
+        if len(hGoaldf_bc) > 0:
+            pitch.scatter(hGoaldf_bc.goalMouthY_plot, hGoaldf_bc.goalMouthZ_plot, marker='football', c=bg_color, zorder=3, edgecolors='white', s=1000, ax=ax)
+        if len(hPostdf_bc) > 0:
+            pitch.scatter(hPostdf_bc.goalMouthY_plot, hPostdf_bc.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolors='orange', hatch='/////', s=1000, ax=ax)
+        if len(aSavedf_bc) > 0:
+            pitch.scatter(aSavedf_bc.goalMouthY_plot, aSavedf_bc.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolor=hcol, hatch='/////', s=1000, ax=ax)
+        if len(aGoaldf_bc) > 0:
+            pitch.scatter(aGoaldf_bc.goalMouthY_plot, aGoaldf_bc.goalMouthZ_plot, marker='football', c=bg_color, zorder=3, edgecolors='white', s=1000, ax=ax)
+        if len(aPostdf_bc) > 0:
+            pitch.scatter(aPostdf_bc.goalMouthY_plot, aPostdf_bc.goalMouthZ_plot, marker='o', c=bg_color, zorder=3, edgecolors='orange', hatch='/////', s=1000, ax=ax)
+        
+        hSaves = len(hSavedf) + len(hSavedf_bc)
+        aSaves = len(aSavedf) + len(aSavedf_bc)
+    else:
+        # Sin datos de goalMouth, solo contar
         hSaves = len(hs[hs['type'] == 'SavedShot'])
-    if aSaves == 0:
         aSaves = len(aws[aws['type'] == 'SavedShot'])
     
     ax.text(52.5, 70, f"{hteamName} PT Paradas", color=hcol, fontsize=30, ha='center', fontweight='bold')
@@ -656,13 +668,12 @@ def plot_Momentum(ax):
     ax.set_yticks([])
 
 def plotting_match_stats(ax):
-    ax.set_facecolor(bg_color)
-    ax.set_xlim(0, 105)
-    ax.set_ylim(-5, 65)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
+    pitch = Pitch(pitch_type='uefa', corner_arcs=True, pitch_color=bg_color, line_color=bg_color, linewidth=2)
+    pitch.draw(ax=ax)
+    ax.set_xlim(-0.5, 105.5)
+    ax.set_ylim(-5, 68.5)
     
+    # Calcular estadísticas
     def get_stats(team):
         t = df[df['teamName'] == team]
         p = t[t['type'] == 'Pass']
@@ -672,30 +683,62 @@ def plotting_match_stats(ax):
         co = p[p['qualifiers'].str.contains('CornerTaken', na=False)]
         tk = t[t['type'] == 'Tackle']
         tkw = tk[tk['outcomeType'] == 'Successful']
-        i = t[t['type'] == 'Interception']
-        c = t[t['type'] == 'Clearance']
+        intc = t[t['type'] == 'Interception']
+        cl = t[t['type'] == 'Clearance']
         ae = t[t['type'] == 'Aerial']
         aew = ae[ae['outcomeType'] == 'Successful']
-        return len(p), len(a), len(lb), len(lba), len(co), len(tk), len(tkw), len(i), len(c), len(ae), len(aew)
+        return len(p), len(a), len(lb), len(lba), len(co), len(tk), len(tkw), len(intc), len(cl), len(ae), len(aew)
     
     hp, hac, hlb, hlba, hcor, htk, htkw, hint, hcl, har, harw = get_stats(hteamName)
     ap, aac, alb, alba, acor, atk, atkw, aint, acl, aar, aarw = get_stats(ateamName)
     
     tot = hp + ap
-    hposs = round(hp/tot*100) if tot > 0 else 50
-    aposs = 100 - hposs
+    hposs = round(hp/tot*100, 1) if tot > 0 else 50
+    aposs = round(100 - hposs, 1)
     
-    pe = [path_effects.Stroke(linewidth=3, foreground=bg_color), path_effects.Normal()]
-    stats = ['Posesion', 'Pases (Acc.)', 'Balones Largos (Acc.)', 'Corners', 'Entradas (ganadas)', 'Intercepciones', 'Despejes', 'Duelos aéreos (ganados)']
+    # Path effect para texto legible
+    path_eff1 = [path_effects.Stroke(linewidth=2, foreground=line_color), path_effects.Normal()]
+    
+    # Título
+    head_y = [62, 68, 68, 62]
+    head_x = [0, 0, 105, 105]
+    ax.fill(head_x, head_y, '#fdf700')
+    ax.text(52.5, 64.5, "Estadisticas Partido", ha='center', va='center', color=line_color, fontsize=25, fontweight='bold', path_effects=path_eff)
+    
+    # Stats y posiciones Y
+    stats_title = [58, 52, 46, 40, 34, 28, 22, 16]
+    stats_names = ['Posesion', 'Pases (Acc.)', 'Balones Largos (Acc.)', 'Corners', 'Entradas (ganadas)', 'Intercepciones', 'Despejes', 'Duelos aéreos (ganados)']
+    stats_home = [hposs, hp, hlb, hcor, htk, hint, hcl, har]
+    stats_away = [aposs, ap, alb, acor, atk, aint, acl, aar]
     hv = [f"{hposs}%", f"{hp}({hac})", f"{hlb}({hlba})", str(hcor), f"{htk}({htkw})", str(hint), str(hcl), f"{har}({harw})"]
     av = [f"{aposs}%", f"{ap}({aac})", f"{alb}({alba})", str(acor), f"{atk}({atkw})", str(aint), str(acl), f"{aar}({aarw})"]
     
-    ax.set_title("Estadisticas Partido", color=line_color, fontsize=25, fontweight='bold')
-    for i, (s, h, a) in enumerate(zip(stats, hv, av)):
-        y = 55 - i * 7
-        ax.text(52.5, y, s, color=line_color, fontsize=15, ha='center', va='center', fontweight='bold', path_effects=pe)
-        ax.text(5, y, h, color=hcol, fontsize=17, ha='left', va='center', fontweight='bold')
-        ax.text(100, y, a, color=acol, fontsize=17, ha='right', va='center', fontweight='bold')
+    # Calcular barras normalizadas
+    for i, (y, name, sh, sa, hval, aval) in enumerate(zip(stats_title, stats_names, stats_home, stats_away, hv, av)):
+        total = sh + sa
+        if total > 0:
+            h_norm = -(sh / total) * 50
+            a_norm = (sa / total) * 50
+        else:
+            h_norm = -25
+            a_norm = 25
+        
+        # Dibujar barras
+        ax.barh(y, h_norm, height=4, color=hcol, left=52.5)
+        ax.barh(y, a_norm, height=4, color=acol, left=52.5)
+        
+        # Textos
+        ax.text(52.5, y, name, color=bg_color, fontsize=14, ha='center', va='center', fontweight='bold', path_effects=path_eff1)
+        ax.text(0, y, hval, color=line_color, fontsize=16, ha='right', va='center', fontweight='bold')
+        ax.text(105, y, aval, color=line_color, fontsize=16, ha='left', va='center', fontweight='bold')
+    
+    # Quitar ejes
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
 
 # ========== FUNCIONES DE VISUALIZACIÓN - DASHBOARD 2 ==========
 def Final_third_entry(ax, team_name, col):
@@ -793,47 +836,59 @@ def zone14hs(ax, team_name, col):
     ax.set_title(f"{team_name}\nPase Zona 14 y carril interior", color=line_color, fontsize=25, fontweight='bold')
 
 def Crosses(ax):
-    pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2, corner_arcs=True)
+    pitch = Pitch(pitch_type='uefa', corner_arcs=True, pitch_color=bg_color, line_color=line_color, linewidth=2)
     pitch.draw(ax=ax)
-    ax.set_xlim(-0.5, 105.5)
     ax.set_ylim(-0.5, 68.5)
+    ax.set_xlim(-0.5, 105.5)
     
-    # Obtener centros de ambos equipos
-    hcrosses = df[(df['teamName']==hteamName) & (df['type']=='Pass') & (df['qualifiers'].str.contains('Cross', na=False)) & (~df['qualifiers'].str.contains('CornerTaken', na=False))]
-    acrosses = df[(df['teamName']==ateamName) & (df['type']=='Pass') & (df['qualifiers'].str.contains('Cross', na=False)) & (~df['qualifiers'].str.contains('CornerTaken', na=False))]
+    home_cross = df[(df['teamName']==hteamName) & (df['type']=='Pass') & (df['qualifiers'].str.contains('Cross', na=False)) & (~df['qualifiers'].str.contains('Corner', na=False))]
+    away_cross = df[(df['teamName']==ateamName) & (df['type']=='Pass') & (df['qualifiers'].str.contains('Cross', na=False)) & (~df['qualifiers'].str.contains('Corner', na=False))]
+    
+    hsuc = 0
+    hunsuc = 0
+    asuc = 0
+    aunsuc = 0
     
     # Dibujar centros del equipo local (invertidos)
-    for _, row in hcrosses.iterrows():
-        col_use = hcol if row['outcomeType'] == 'Successful' else 'gray'
-        pitch.lines(105 - row['x'], 68 - row['y'], 105 - row['endX'], 68 - row['endY'], color=col_use, lw=2, comet=True, alpha=0.6, ax=ax)
-        ax.scatter(105 - row['endX'], 68 - row['endY'], s=30, color=col_use, edgecolor=line_color, zorder=3, alpha=0.8)
+    for index, row in home_cross.iterrows():
+        if row['outcomeType'] == 'Successful':
+            arrow = patches.FancyArrowPatch((105-row['x'], 68-row['y']), (105-row['endX'], 68-row['endY']), arrowstyle='->', mutation_scale=15, color=hcol, linewidth=1.5, alpha=1)
+            ax.add_patch(arrow)
+            hsuc += 1
+        else:
+            arrow = patches.FancyArrowPatch((105-row['x'], 68-row['y']), (105-row['endX'], 68-row['endY']), arrowstyle='->', mutation_scale=10, color=line_color, linewidth=1.5, alpha=0.25)
+            ax.add_patch(arrow)
+            hunsuc += 1
     
     # Dibujar centros del equipo visitante
-    for _, row in acrosses.iterrows():
-        col_use = acol if row['outcomeType'] == 'Successful' else 'gray'
-        pitch.lines(row['x'], row['y'], row['endX'], row['endY'], color=col_use, lw=2, comet=True, alpha=0.6, ax=ax)
-        ax.scatter(row['endX'], row['endY'], s=30, color=col_use, edgecolor=line_color, zorder=3, alpha=0.8)
+    for index, row in away_cross.iterrows():
+        if row['outcomeType'] == 'Successful':
+            arrow = patches.FancyArrowPatch((row['x'], row['y']), (row['endX'], row['endY']), arrowstyle='->', mutation_scale=15, color=acol, linewidth=1.5, alpha=1)
+            ax.add_patch(arrow)
+            asuc += 1
+        else:
+            arrow = patches.FancyArrowPatch((row['x'], row['y']), (row['endX'], row['endY']), arrowstyle='->', mutation_scale=10, color=line_color, linewidth=1.5, alpha=0.25)
+            ax.add_patch(arrow)
+            aunsuc += 1
     
-    # Estadísticas
-    hs = len(hcrosses[hcrosses['outcomeType']=='Successful'])
-    ht = len(hcrosses)
-    hl = len(hcrosses[hcrosses['y']>=45.33])
-    hr = len(hcrosses[hcrosses['y']<22.67])
+    # Estadísticas por zona
+    home_left = len(home_cross[home_cross['y']>=34])
+    home_right = len(home_cross[home_cross['y']<34])
+    away_left = len(away_cross[away_cross['y']>=34])
+    away_right = len(away_cross[away_cross['y']<34])
     
-    asuc = len(acrosses[acrosses['outcomeType']=='Successful'])
-    at = len(acrosses)
-    al = len(acrosses[acrosses['y']>=45.33])
-    ar = len(acrosses[acrosses['y']<22.67])
+    ax.text(51, 2, f"Centros desde\nla Izquierda: {home_left}", color=hcol, fontsize=15, va='bottom', ha='right')
+    ax.text(51, 66, f"Centros desde\nla Derecha: {home_right}", color=hcol, fontsize=15, va='top', ha='right')
+    ax.text(54, 66, f"Centros desde\nLa Izquierda: {away_left}", color=acol, fontsize=15, va='top', ha='left')
+    ax.text(54, 2, f"Centros desde\nLa Derecha: {away_right}", color=acol, fontsize=15, va='bottom', ha='left')
     
-    # Textos
-    ax.text(20, 55, f"Centros desde\nla Derecha: {hr}", color=hcol, fontsize=14, ha='center', fontweight='bold')
-    ax.text(20, 13, f"Centros desde\nla Izquierda: {hl}", color=hcol, fontsize=14, ha='center', fontweight='bold')
-    ax.text(85, 55, f"Centros desde\nla Izquierda: {al}", color=acol, fontsize=14, ha='center', fontweight='bold')
-    ax.text(85, 13, f"Centros desde\nLa Derecha: {ar}", color=acol, fontsize=14, ha='center', fontweight='bold')
-    ax.set_title(f"{hteamName} <---Centros", color=hcol, fontsize=20, fontweight='bold', loc='left')
-    ax.set_title(f"{ateamName} Centros--->", color=acol, fontsize=20, fontweight='bold', loc='right')
-    ax.text(20, -3, f"Acertados: {hs}\nFallados: {ht-hs}", color=hcol, fontsize=12, ha='center')
-    ax.text(85, -3, f"Acertados: {asuc}\nFallados: {at-asuc}", color=acol, fontsize=12, ha='center')
+    ax.text(0, -2, f"Acertados: {hsuc}", color=hcol, fontsize=20, ha='left', va='top')
+    ax.text(0, -5.5, f"Fallados: {hunsuc}", color=line_color, fontsize=20, ha='left', va='top')
+    ax.text(105, -2, f"Acertados: {asuc}", color=acol, fontsize=20, ha='right', va='top')
+    ax.text(105, -5.5, f"Fallados: {aunsuc}", color=line_color, fontsize=20, ha='right', va='top')
+    
+    ax.text(0, 70, f"{hteamName}\n<---Centros", color=hcol, size=25, ha='left', fontweight='bold')
+    ax.text(105, 70, f"{ateamName}\nCentros--->", color=acol, size=25, ha='right', fontweight='bold')
 
 def Pass_end_zone(ax, team_name, cm):
     pez = df[(df['teamName']==team_name) & (df['type']=='Pass') & (df['outcomeType']=='Successful')]
@@ -1250,25 +1305,33 @@ def defender_bar(ax):
     ax.legend()
 
 def threat_creators(ax):
-    if xT_df is None or xT_df.empty:
-        ax.set_facecolor(bg_color)
-        ax.set_title("Sin datos xT", color=line_color, fontsize=25, fontweight='bold')
+    ax.set_facecolor(bg_color)
+    
+    if xT_df is None or xT_df.empty or xT_df['total'].sum() == 0:
+        # Mostrar mensaje si no hay datos xT
+        ax.text(0.5, 0.5, "Top 10 jugadores más peligrosos\n(Requiere cálculo xT)", 
+                color=line_color, fontsize=20, ha='center', va='center', transform=ax.transAxes)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
         return
     
-    top10 = xT_df.nsmallest(10, 'total')['shortName'].tolist()
-    xtp = xT_df.nsmallest(10, 'total')['xT from Pass'].tolist()
-    xtc = xT_df.nsmallest(10, 'total')['xT from Carry'].tolist()
+    # Obtener top 10 por total descendente
+    top10_df = xT_df.nlargest(10, 'total')
+    top10 = top10_df['shortName'].tolist()[::-1]  # Invertir para que el mayor esté arriba
+    xtp = top10_df['xT from Pass'].tolist()[::-1]
+    xtc = top10_df['xT from Carry'].tolist()[::-1]
     
     ax.barh(top10, xtp, label='xT Pases', color=col1, left=0)
     ax.barh(top10, xtc, label='xT Conducción', color=violet, left=xtp)
     
-    ax.set_facecolor(bg_color)
     ax.tick_params(axis='x', colors=line_color, labelsize=15)
     ax.tick_params(axis='y', colors=line_color, labelsize=15)
     for spine in ax.spines.values():
         spine.set_edgecolor(bg_color)
     ax.set_title("Top 10 jugadores más peligrosos", color=line_color, fontsize=25, fontweight='bold')
-    ax.legend()
+    ax.legend(loc='lower right', facecolor=bg_color, edgecolor=line_color, labelcolor=line_color)
 
 # ========== GENERADORES DE DASHBOARDS ==========
 def generate_dashboard_1():
